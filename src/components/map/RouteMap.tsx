@@ -39,8 +39,8 @@ export default function RouteMap({ variant, color, trackedBus, selectedStopIndex
           </div>
         </div>
 
-        {/* Stop dots + lines */}
-        <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', paddingBottom: 8 }}>
+        {/* Stop dots + lines — scrollable within the map card only */}
+        <div style={{ display: 'flex', alignItems: 'center', overflowX: 'auto', overflowY: 'hidden', paddingBottom: 8, maxWidth: '100%' }}>
           {stops.map((stop, i) => {
             const isBusHere = trackedBus?.stopIndex === i
             const isPassed  = trackedBus != null && i < trackedBus.stopIndex

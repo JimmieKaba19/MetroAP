@@ -19,12 +19,13 @@ html {
 
 html, body, #root {
   height: 100%;
+  width: 100%;
   font-family: 'DM Sans', 'Segoe UI', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Fill the whole screen including notch/home-indicator areas */
-  width: 100%;
   overflow-x: hidden;
+  /* Background matches the app — no naked body colour showing through */
+  background-color: #080D18;
 }
 
 /* ── Safe area padding for notched phones ────────────────────────────────────── */

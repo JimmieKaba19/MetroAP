@@ -19,6 +19,8 @@ interface BusTrackingContextValue {
   color: string
   selectCorridor: (corridor: Corridor) => void
   selectVariant: (variant: RouteVariant) => void
+  /** Atomically select both corridor and a specific variant — use from Routes page */
+  selectCorridorAndVariant: (corridor: Corridor, variant: RouteVariant) => void
 
   // Stop
   selectedStopIndex: number
@@ -116,6 +118,18 @@ export function BusTrackingProvider({ children }: { children: ReactNode }) {
     setSelectedStopIndex(0)
   }, [])
 
+  // Sets corridor + exact variant in one state flush — avoids the
+  // intermediate render where corridor is updated but variant still
+  // points to the previous corridor's first variant.
+  const selectCorridorAndVariant = useCallback(
+    (corridor: Corridor, variant: RouteVariant) => {
+      setSelectedCorridor(corridor)
+      setSelectedVariant(variant)
+      setTrackedBus(null)
+      setSelectedStopIndex(0)
+    },
+    []
+  )
   const trackBus = useCallback((bus: Bus) => {
     setTrackedBus(bus)
     setEtaCount(bus.eta)
@@ -137,6 +151,7 @@ export function BusTrackingProvider({ children }: { children: ReactNode }) {
         color: selectedCorridor.color,
         selectCorridor,
         selectVariant,
+        selectCorridorAndVariant,
         selectedStopIndex,
         setSelectedStopIndex,
         buses: variantBuses,
