@@ -1,0 +1,260 @@
+// ─── Prisma schema ─────────────────────────────────────────────────────────────
+// Run:  npx prisma migrate dev --name init
+// View: npx prisma studio
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Operator ──────────────────────────────────────────────────────────────────
+// A bus company — e.g. Super Metro. All routes and buses belong to an operator.
+
+model Operator {
+  id        String   @id @default(cuid())
+  name      String   @unique         // "Super Metro"
+  slug      String   @unique         // "super-metro"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  corridors  Corridor[]
+  buses      Bus[]
+  conductors Conductor[]
+}
+
+// ─── Corridor ──────────────────────────────────────────────────────────────────
+// A named road corridor — e.g. "Thika Road". Has multiple route variants.
+
+model Corridor {
+  id         String   @id @default(cuid())
+  name       String                        // "Thika Road"
+  color      String                        // "#00C896" — hex accent
+  operatorId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  operator Operator       @relation(fields: [operatorId], references: [id])
+  variants RouteVariant[]
+}
+
+// ─── RouteVariant ──────────────────────────────────────────────────────────────
+// A specific direction/type on a corridor — Outbound, Inbound, Express.
+
+model RouteVariant {
+  id          String    @id @default(cuid())
+  code        String    @unique             // "TH-01-OUT"
+  label       String                        // "Outbound"
+  direction   Direction
+  corridorId  String
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  corridor RouteVariant_Stop[]
+  stops    RouteVariant_Stop[]  @relation("VariantStops")
+  shifts   Shift[]
+  alerts   Alert[]
+
+  @@index([corridorId])
+}
+
+// ─── Stop ──────────────────────────────────────────────────────────────────────
+// A physical bus stop with GPS coordinates.
+
+model Stop {
+  id        String   @id @default(cuid())
+  name      String                         // "Globe Roundabout"
+  slug      String   @unique               // "globe-roundabout"
+  lat       Float
+  lng       Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  variantStops RouteVariant_Stop[]
+}
+
+// ─── RouteVariant_Stop ─────────────────────────────────────────────────────────
+// Join table — ordered list of stops on a variant.
+// stopOrder starts at 0 (first stop) and increments by 1.
+
+model RouteVariant_Stop {
+  id          String @id @default(cuid())
+  variantId   String
+  stopId      String
+  stopOrder   Int                          // position in sequence
+
+  variant RouteVariant @relation("VariantStops", fields: [variantId], references: [id])
+  stop    Stop         @relation(fields: [stopId], references: [id])
+
+  @@unique([variantId, stopOrder])
+  @@unique([variantId, stopId])
+  @@index([variantId])
+}
+
+// ─── Bus ───────────────────────────────────────────────────────────────────────
+// A physical vehicle. Belongs to an operator.
+
+model Bus {
+  id           String    @id @default(cuid())
+  fleetNumber  String    @unique             // "SM-047"
+  capacity     Int       @default(50)
+  operatorId   String
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  operator Operator @relation(fields: [operatorId], references: [id])
+  shifts   Shift[]
+}
+
+// ─── Conductor ────────────────────────────────────────────────────────────────
+// A bus conductor. Credentials issued by the operator, not self-registered.
+
+model Conductor {
+  id           String   @id @default(cuid())
+  name         String
+  phone        String   @unique
+  passwordHash String
+  operatorId   String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  operator Operator @relation(fields: [operatorId], references: [id])
+  shifts   Shift[]
+}
+
+// ─── Shift ─────────────────────────────────────────────────────────────────────
+// One conductor + one bus + one variant, for one working session.
+// GPS pings are attached to a shift, not directly to a bus.
+
+model Shift {
+  id          String      @id @default(cuid())
+  conductorId String
+  busId       String
+  variantId   String
+  status      ShiftStatus @default(ACTIVE)
+  startedAt   DateTime    @default(now())
+  endedAt     DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  conductor Conductor  @relation(fields: [conductorId], references: [id])
+  bus       Bus        @relation(fields: [busId], references: [id])
+  variant   RouteVariant @relation(fields: [variantId], references: [id])
+  gpsPings  GpsPing[]
+  alerts    Alert[]
+
+  @@index([variantId, status])
+  @@index([busId, status])
+}
+
+// ─── GpsPing ──────────────────────────────────────────────────────────────────
+// Every GPS ping from the conductor app. Time-series data.
+// Kept for analytics + replay. Live position is cached in Redis.
+
+model GpsPing {
+  id           String   @id @default(cuid())
+  shiftId      String
+  lat          Float
+  lng          Float
+  speed        Float    @default(0)        // km/h
+  heading      Float?                      // degrees 0–360
+  accuracy     Float?                      // GPS accuracy in metres
+  stopIndex    Int?                        // matched stop index on variant
+  createdAt    DateTime @default(now())
+
+  shift Shift @relation(fields: [shiftId], references: [id])
+
+  @@index([shiftId, createdAt])
+}
+
+// ─── Alert ────────────────────────────────────────────────────────────────────
+// Conductor-filed delay, breakdown, or diversion. Also system-generated.
+
+model Alert {
+  id          String      @id @default(cuid())
+  variantId   String
+  shiftId     String?                      // null for system alerts
+  type        AlertType
+  source      AlertSource
+  message     String
+  delayMins   Int?                         // only for DELAY type
+  createdAt   DateTime    @default(now())
+
+  variant RouteVariant @relation(fields: [variantId], references: [id])
+  shift   Shift?       @relation(fields: [shiftId], references: [id])
+
+  @@index([variantId, createdAt])
+}
+
+// ─── FeedbackReport ───────────────────────────────────────────────────────────
+// Passenger crowd-sourced reports — ma3route style.
+
+model FeedbackReport {
+  id          String         @id @default(cuid())
+  variantId   String
+  stopName    String
+  type        FeedbackType
+  text        String         @default("")
+  voteCount   Int            @default(0)
+  createdAt   DateTime       @default(now())
+
+  votes FeedbackVote[]
+
+  @@index([variantId, createdAt])
+}
+
+// ─── FeedbackVote ─────────────────────────────────────────────────────────────
+// One upvote per session token per report — prevents spam.
+
+model FeedbackVote {
+  id           String   @id @default(cuid())
+  reportId     String
+  sessionToken String                       // anonymous passenger session
+  createdAt    DateTime @default(now())
+
+  report FeedbackReport @relation(fields: [reportId], references: [id])
+
+  @@unique([reportId, sessionToken])
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Direction {
+  OUT   // Outbound — CBD → terminus
+  IN    // Inbound  — terminus → CBD
+}
+
+enum ShiftStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED   // conductor went offline without ending shift
+}
+
+enum AlertType {
+  DELAY
+  BREAKDOWN
+  DIVERSION
+  ARRIVAL     // system — bus approaching stop
+  RESUMED     // traffic cleared
+}
+
+enum AlertSource {
+  CONDUCTOR
+  SYSTEM
+  PASSENGER
+}
+
+enum FeedbackType {
+  FULL
+  DELAYED
+  ARRIVED
+  SKIPPED
+  ACCIDENT
+  SMOOTH
+}

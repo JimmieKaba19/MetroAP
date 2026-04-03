@@ -31,8 +31,6 @@
 2. adding route management
 
 3. adding analytics
-   
-   
 
 # MetroAP Back-end
 
@@ -204,8 +202,6 @@ redis-cli ping   # should reply PONG
 
 Once you confirm PostgreSQL and Redis are running, we go straight to Step 1 — scaffold the project and wire up the config. Shall we proceed?
 
-
-
 # Working on backend
 
 - installing postgresql and redis-server
@@ -224,6 +220,7 @@ cd metroAP-api
 ```
 
 Then recreate this folder structure and paste each file in:
+
 ```
 metroAP-api/
 ├── package.json
@@ -251,4 +248,42 @@ metroAP-api/
         └── feedback.ts
 ```
 
-Create the folders first:
+Create the folders first:                                                                                                                                                                
+
+
+
+
+
+# Activities working on currently.
+
+1. creating the files for the backend
+   
+   1. prisma and src directories
+
+2. creating the database in postresql
+   
+   ```bash
+   psql -U postgres -c "CREATE DATABASE metroap;"
+   ```
+
+3. installing all the npm dependencies
+
+4. running the database migration and seed
+   
+   ```bash
+   npx prisma migrate dev --name init
+   npm run db:seed
+   ```
+
+5. we should see the routes and seeds being displayed
+
+6. run the npm dev
+   
+   ```bash
+   npm run dev
+   
+   
+   //
+   metroAP API running
+   localhost etc
+   ```
